@@ -759,7 +759,7 @@ void check_ocean_mask(int nx, int ny, const double *wet_in, int cyclic_x, int cy
 	char file[128];
 	FILE *fp;
 
-	sprintf(file, "mask_table.%d.%dx%d", nmask, layout[0], layout[1]);
+	sprintf(file, "mask_table.%dx%d.%d", layout[0], layout[1], np - nmask);
 	fp=fopen(file, "w");
 	fprintf(fp, "%d\n", nmask);
 	fprintf(fp, "%d, %d\n", layout[0], layout[1]);
