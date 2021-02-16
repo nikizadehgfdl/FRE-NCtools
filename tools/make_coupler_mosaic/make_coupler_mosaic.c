@@ -581,9 +581,9 @@ int main (int argc, char *argv[])
       clip_method = LEGACY_CLIP;
 
     /* Currenly only implement interp_order = 1 when clip_method = "conserve_great_circle" */
-    if( interp_order != 1 && clip_method == GREAT_CIRCLE_CLIP)
+    /*if( interp_order != 1 && clip_method == GREAT_CIRCLE_CLIP)
       mpp_error("make_coupler_mosaic:  Currenly only implement interp_order = 1 when clip_method = 'conserve_great_circle', contact developer");
-
+    */ 
 
     /* compute atm_area */
     if(clip_method == GREAT_CIRCLE_CLIP) {
@@ -1358,6 +1358,12 @@ int main (int argc, char *argv[])
 	  xa[1] = cart_xatm[na][n1]; ya[1] = cart_yatm[na][n1]; za[1] = cart_zatm[na][n1];
 	  xa[2] = cart_xatm[na][n2]; ya[2] = cart_yatm[na][n2]; za[2] = cart_zatm[na][n2];
 	  xa[3] = cart_xatm[na][n3]; ya[3] = cart_yatm[na][n3]; za[3] = cart_zatm[na][n3];
+          //JWD
+          double xtmp[4],ytmp[4];
+          xyz2latlon(4, xa, ya, za, xtmp, ytmp);
+          na_in   = fix_lon(xtmp, ytmp, 4, M_PI);
+	  xa_avg  = avgval_double(na_in, xtmp);
+
 	}
 	else {
 	  n0 = ja    *(nxa[na]+1) + ia;
@@ -1580,8 +1586,19 @@ int main (int argc, char *argv[])
 		  atmxocn_ia[na][no][naxo[na][no]]   = ia;
 		  atmxocn_ja[na][no][naxo[na][no]]   = ja;
 		  if(interp_order == 2) {
-		    atmxocn_clon[na][no][naxo[na][no]] = poly_ctrlon ( x_out, y_out, n_out, xa_avg)*ocn_frac;
-		    atmxocn_clat[na][no][naxo[na][no]] = poly_ctrlat ( x_out, y_out, n_out )*ocn_frac;
+                    //JWD
+	            if( clip_method == GREAT_CIRCLE_CLIP ) {
+                      double clat, clon;
+                      double xtmp[20],ytmp[20];
+                      /* convert to lon-lat */
+                      xyz2latlon(n_out, x_out, y_out, z_out, xtmp, ytmp);
+                      atmxocn_clon[na][no][naxo[na][no]] = -poly_ctrlon(xtmp,ytmp,n_out,xa_avg)*ocn_frac;
+                      atmxocn_clat[na][no][naxo[na][no]] = -poly_ctrlat(xtmp,ytmp,n_out)*ocn_frac;
+                    }
+                    else {
+		      atmxocn_clon[na][no][naxo[na][no]] = poly_ctrlon(x_out,y_out,n_out, xa_avg)*ocn_frac;
+		      atmxocn_clat[na][no][naxo[na][no]] = poly_ctrlat ( x_out, y_out, n_out )*ocn_frac;		
+                    }
 		  }
 		  ++(naxo[na][no]);
 		  if(naxo[na][no] > MAXXGRID) mpp_error("naxo is greater than MAXXGRID, increase MAXXGRID");
@@ -1617,8 +1634,19 @@ int main (int argc, char *argv[])
 
 		    axl_area[l] += xarea;
 		    if(interp_order == 2) {
-		      axl_clon[l] += poly_ctrlon ( x_out, y_out, n_out, xa_avg)*lnd_frac;
-		      axl_clat[l] += poly_ctrlat ( x_out, y_out, n_out)*lnd_frac;
+                    //JWD
+                      if( clip_method == GREAT_CIRCLE_CLIP ) {
+                        double clat, clon;
+                        double xtmp[20],ytmp[20];
+                        /* convert to lon-lat */
+                        xyz2latlon(n_out, x_out, y_out, z_out, xtmp, ytmp);
+                        axl_clon[l] += -poly_ctrlon(xtmp,ytmp,n_out,xa_avg)*lnd_frac;
+                        axl_clat[l] += -poly_ctrlat(xtmp,ytmp,n_out)*lnd_frac;
+                      }
+                      else {
+		        axl_clon[l] += poly_ctrlon ( x_out, y_out, n_out, xa_avg)*lnd_frac;
+		        axl_clat[l] += poly_ctrlat ( x_out, y_out, n_out)*lnd_frac;
+                      }
 		    }
 		  }
 		}
@@ -2511,6 +2539,12 @@ int main (int argc, char *argv[])
 	  xl[1] = cart_xlnd[nl][n1]; yl[1] = cart_ylnd[nl][n1]; zl[1] = cart_zlnd[nl][n1];
 	  xl[2] = cart_xlnd[nl][n2]; yl[2] = cart_ylnd[nl][n2]; zl[2] = cart_zlnd[nl][n2];
 	  xl[3] = cart_xlnd[nl][n3]; yl[3] = cart_ylnd[nl][n3]; zl[3] = cart_zlnd[nl][n3];
+          //JWD
+          double xtmp[4],ytmp[4];
+          xyz2latlon(4, xl, yl, zl, xtmp, ytmp);
+	  nl_in   = fix_lon(xtmp, ytmp, 4, M_PI);
+          xl_avg  = avgval_double(nl_in, xtmp);
+
 	}
 	else {
 	  n0 = jl    *(nxl[nl]+1) + il;
@@ -2581,10 +2615,21 @@ int main (int argc, char *argv[])
 		lndxocn_jo[nl][no][nlxo[nl][no]]   = jo;
 		lndxocn_il[nl][no][nlxo[nl][no]]   = il;
 		lndxocn_jl[nl][no][nlxo[nl][no]]   = jl;
-		if(interp_order == 2) {
-		  lndxocn_clon[nl][no][nlxo[nl][no]] = poly_ctrlon ( x_out, y_out, n_out, xl_avg)*ocn_frac;
-		  lndxocn_clat[nl][no][nlxo[nl][no]] = poly_ctrlat ( x_out, y_out, n_out )*ocn_frac;
-		}
+                if(interp_order == 2) {
+                  //JWD
+                  if( clip_method == GREAT_CIRCLE_CLIP ) {
+                    double clat, clon;
+                    double xtmp[20],ytmp[20];
+                    /* convert to lon-lat */
+                    xyz2latlon(n_out, x_out, y_out, z_out, xtmp, ytmp);
+                    lndxocn_clon[nl][no][nlxo[nl][no]] = -poly_ctrlon(xtmp,ytmp,n_out,xl_avg)*ocn_frac;
+                    lndxocn_clat[nl][no][nlxo[nl][no]] = -poly_ctrlat(xtmp,ytmp,n_out)*ocn_frac;
+                  }
+                  else {
+                    lndxocn_clon[nl][no][nlxo[nl][no]] = poly_ctrlon ( x_out, y_out, n_out, xl_avg)*ocn_frac;
+                    lndxocn_clat[nl][no][nlxo[nl][no]] = poly_ctrlat ( x_out, y_out, n_out )*ocn_frac;
+                  }
+                }
 		++(nlxo[nl][no]);
 		if(nlxo[nl][no] > MAXXGRID) mpp_error("nlxo is greater than MAXXGRID, increase MAXXGRID");
 	      }
@@ -3045,6 +3090,12 @@ int main (int argc, char *argv[])
 	  xw[1] = cart_xwav[nw][n1]; yw[1] = cart_ywav[nw][n1]; zw[1] = cart_zwav[nw][n1];
 	  xw[2] = cart_xwav[nw][n2]; yw[2] = cart_ywav[nw][n2]; zw[2] = cart_zwav[nw][n2];
 	  xw[3] = cart_xwav[nw][n3]; yw[3] = cart_ywav[nw][n3]; zw[3] = cart_zwav[nw][n3];
+          //JWD
+          double xtmp[4],ytmp[4];
+          xyz2latlon(4, xw, yw, zw, xtmp, ytmp);
+          nw_in   = fix_lon(xtmp, ytmp, 4, M_PI);
+          xw_avg  = avgval_double(nw_in, xtmp);
+
 	}
 	else {
 	  n0 = jw    *(nxw[nw]+1) + iw;
@@ -3105,8 +3156,16 @@ int main (int argc, char *argv[])
 		if(xw_min >= xo_max || xw_max <= xo_min || yw_min >= yo_max || yw_max <= yo_min ) continue;
 		n_out = clip_2dx2d( xw, yw, nw_in, xo, yo, no_in, x_out, y_out);
 	      }
-	      if (  n_out > 0) {
-		xarea = poly_area(x_out, y_out, n_out )*ocn_frac;
+              /* JWD: It seems to be a bug not to include great_circle_area calc */
+	      /*  if (  n_out > 0) {
+		xarea = poly_area(x_out, y_out, n_out )*ocn_frac; */
+
+                if (  n_out > 0 ){
+                   if(clip_method == GREAT_CIRCLE_CLIP)
+                     xarea=great_circle_area ( n_out, x_out, y_out, z_out)*ocn_frac;
+                   else
+                     xarea = poly_area(x_out, y_out, n_out )*ocn_frac;
+
 		min_area = min(area_ocn[no][jo*nxo[no]+io], area_wav[nw][lw]);
 		if(xarea/min_area > area_ratio_thresh) {
 
@@ -3116,8 +3175,19 @@ int main (int argc, char *argv[])
 		  wavxocn_iw[nw][no][nwxo[nw][no]]   = iw;
 		  wavxocn_jw[nw][no][nwxo[nw][no]]   = jw;
 		  if(interp_order == 2) {
-		    wavxocn_clon[nw][no][nwxo[nw][no]] = poly_ctrlon ( x_out, y_out, n_out, xw_avg)*ocn_frac;
-		    wavxocn_clat[nw][no][nwxo[nw][no]] = poly_ctrlat ( x_out, y_out, n_out )*ocn_frac;
+          	    //JWD
+		    if( clip_method == GREAT_CIRCLE_CLIP ) {
+		      double clat, clon;
+		      double xtmp[20],ytmp[20];
+		      /* convert to lon-lat */
+		      xyz2latlon(n_out, x_out, y_out, z_out, xtmp, ytmp);
+		      wavxocn_clon[nw][no][nwxo[nw][no]] = -poly_ctrlon(xtmp,ytmp,n_out,xw_avg)*ocn_frac;
+		      wavxocn_clat[nw][no][nwxo[nw][no]] = -poly_ctrlat(xtmp,ytmp,n_out)*ocn_frac;
+		    }
+		    else {
+		      wavxocn_clon[nw][no][nwxo[nw][no]] = poly_ctrlon ( x_out, y_out, n_out, xw_avg)*ocn_frac;
+		      wavxocn_clat[nw][no][nwxo[nw][no]] = poly_ctrlat ( x_out, y_out, n_out )*ocn_frac;
+		    }
 		  }
 		  ++(nwxo[nw][no]);
 		  if(nwxo[nw][no] > MAXXGRID) mpp_error("nwxo is greater than MAXXGRID, increase MAXXGRID");
