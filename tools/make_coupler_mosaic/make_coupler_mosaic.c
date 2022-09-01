@@ -38,6 +38,38 @@
 	Read OCN depth and set ocean mask omask=1 where wet
 
 */
+/* Doxygen
+Excerpts from https://github.com/NOAA-GFDL/FRE-NCtools/wiki/A-Guide-to-Grid-Coupling-in-FMS
+Make_coupler_mosaic takes care that the land and ocean grids perfectly tile the sphere. 
+The land model’s domain is defined as the part of the sphere not covered by 
+ocean (where wet = 0 on the ocean grid). To accomplish this, the land cells 
+must be modified to remove the ocean parts. This is done in make_xgrids by first 
+taking the intersections of atmosphere and land cells. The overlap area between 
+these cells and active ocean cells are then subtracted. 
+Finally, the modified atmosphere/land intersections are aggregated into land cell 
+areas and atmosphere/land exchange cell areas.
+Model cell intersections are calculated using the Sutherland-Hodgeman polygon clipping algorithm 
+(Sutherland and Hodgeman, 1974). This algorithm finds the intersection of a convex and arbitrary 
+polygon by successively removing the portion of the latter that is “outside” each boundary of the former. 
+It can be found in many computer graphics text books (e.g. Foley et al, 1990). 
+The implementation in make_xgrids is particularly simple because the clipping polygon is always 
+a rectangle in longitude/latitude space. For the purpose of finding the line intersections in the 
+clipping operations, the cell boundaries are assumed to be straight lines in longitude/latitude space. 
+This treatment is only perfectly accurate for cells bounded by lines of longitude and latitude.
+
+Spherical areas are calculated as in Jones (1999) by taking the integral of the negative sine of 
+latitude around the boundary of a polygon. The integration pathways are again straight lines in 
+longitude/latitude space.
+
+Make_coupler_mosaic checks that the sphere and the individual cells of the atmosphere and ocean grids are 
+tiled by the surface exchange cells. The fractional tiling errors are reported.
+
+References:
+Foley, J. D., A. van Dam, S. K. Feiner, and J. F. Hughes, 1990: 
+Computer graphics: principles and practice, second edition. Addison Wesley, 1174 pp.
+Jones, P. W., 1999: First- and second-order conservative remapping schemes for grids in spherical coordinates. 
+Monthly Weather Review, 127, 2204-2210.
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
