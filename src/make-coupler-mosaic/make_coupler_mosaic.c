@@ -5504,7 +5504,7 @@ int main (int argc, char *argv[])
                     omosaic_dir, omosaic_file, omosaic_name,
                     wmosaic, wmosaic_dir, wmosaic_file, wmosaic_name,
                     otopog_dir, otopog_file,
-                    axo_file, axl_file, lxo_file, wxo_file);
+                    axl_file, axo_file, lxo_file, wxo_file);
 
   if (mpp_pe () == mpp_root_pe () && verbose)
     {
