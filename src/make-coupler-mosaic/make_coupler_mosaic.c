@@ -54,6 +54,105 @@
 #include <string.h>
 #include <time.h>
 #define print_grid 0
+#define MAXXGRIDFILE 100
+#define MX 2000
+#define TINY_VALUE (1.e-7)
+#define TOLORENCE (1.e-4)
+#define MIN_AREA_FRAC (1.e-4)
+#define GREAT_CIRCLE_CLIP 1
+#define LEGACY_CLIP 2
+
+char grid_version[] = "0.2";
+char tagname[] = "$Name: fre-nctools-bronx-10 $";
+
+
+/* Forward declarations for helper functions used before their definitions */
+static void allocate_wavxocn_arrays(int ntile_wav, int ntile_ocn, int interp_order,
+                                    size_t ***nwxo_ptr,
+                                    double ****wavxocn_area_ptr,
+                                    int ****wavxocn_iw_ptr, int ****wavxocn_jw_ptr,
+                                    int ****wavxocn_io_ptr, int ****wavxocn_jo_ptr,
+                                    double ****wavxocn_diw_ptr, double ****wavxocn_djw_ptr,
+                                    double ****wavxocn_dio_ptr, double ****wavxocn_djo_ptr,
+                                    double ****wavxocn_clon_ptr, double ****wavxocn_clat_ptr);
+
+static void compute_wavxocn(int ntile_wav, int ntile_ocn,
+                           int *nxw, int *nyw, int *nxo, int *nyo,
+                           double **xwav, double **ywav,
+                           double **cart_xwav, double **cart_ywav,
+                           double **cart_zwav,
+                           double **xocn, double **yocn,
+                           double **cart_xocn, double **cart_yocn,
+                           double **cart_zocn,
+                           double **area_wav, double **area_ocn,
+                           double **omask,
+                           double area_ratio_thresh,
+                           int interp_order, int clip_method,
+                           int wav_same_as_ocn,
+                           size_t **nwxo,
+                           double ***wavxocn_area,
+                           int ***wavxocn_iw, int ***wavxocn_jw,
+                           int ***wavxocn_io, int ***wavxocn_jo,
+                           double ***wavxocn_diw, double ***wavxocn_djw,
+                           double ***wavxocn_dio, double ***wavxocn_djo,
+                           double ***wavxocn_clon, double ***wavxocn_clat, unsigned int verbose);
+
+static void write_wav_masks_and_centroids(int ntile_wav, int ntile_ocn,
+                                         int *nxw, int *nyw,
+                                         int *nxo, int *nyo,
+                                         size_t **nwxo,
+                                         double ***wavxocn_area,
+                                         int ***wavxocn_iw, int ***wavxocn_jw,
+                                         int ***wavxocn_io, int ***wavxocn_jo,
+                                         double ***wavxocn_diw, double ***wavxocn_djw,
+                                         double ***wavxocn_dio, double ***wavxocn_djo,
+                                         double ***wavxocn_clon,
+                                         double ***wavxocn_clat,
+                                         double **area_wav, double **area_ocn,
+                                         double **omask,
+                                         int interp_order,
+                                         char *history, char *grid_version,
+                                         int clip_method, unsigned int verbose);
+
+static void write_wavxocn_files(int ntile_wav, int ntile_ocn,
+                               size_t **nwxo,
+                               double ***wavxocn_area,
+                               int ***wavxocn_iw, int ***wavxocn_jw,
+                               int ***wavxocn_io, int ***wavxocn_jo,
+                               double ***wavxocn_diw, double ***wavxocn_djw,
+                               double ***wavxocn_dio, double ***wavxocn_djo,
+                               double ***wavxocn_clon, double ***wavxocn_clat,
+                               char wxo_file[MAXXGRIDFILE][STRING],
+                               char *wmosaic_name, char **wtile_name,
+                               char *omosaic_name, char **otile_name,
+                               int same_mosaic,
+                               char *history, char *grid_version,
+                               int clip_method, int interp_order,
+                               int ocn_south_ext, int *nfile_wxo,
+                               double *wxo_area_sum, int check);
+
+static void free_wavxocn_arrays(int ntile_wav, int ntile_ocn, int interp_order,
+                               size_t **nwxo,
+                               double ***wavxocn_area,
+                               int ***wavxocn_iw, int ***wavxocn_jw,
+                               int ***wavxocn_io, int ***wavxocn_jo,
+                               double ***wavxocn_clon, double ***wavxocn_clat,
+                               double ***wavxocn_diw, double ***wavxocn_djw,
+                               double ***wavxocn_dio, double ***wavxocn_djo);
+
+static void write_mosaic_file(const char *mosaic_file, char *history, char *grid_version,
+                              int clip_method,
+                              int nfile_axo, int nfile_axl, int nfile_lxo,
+                              int nfile_wxo,
+                              char *amosaic_dir, char *amosaic_file, char *amosaic_name,
+                              char *lmosaic_dir, char *lmosaic_file, char *lmosaic_name,
+                              char *omosaic_dir, char *omosaic_file, char *omosaic_name,
+                              char *wmosaic, char *wmosaic_dir, char *wmosaic_file, char *wmosaic_name,
+                              char *otopog_dir, char *otopog_file,
+                              char axl_file[MAXXGRIDFILE][STRING],
+                              char axo_file[MAXXGRIDFILE][STRING],
+                              char lxo_file[MAXXGRIDFILE][STRING],
+                              char wxo_file[MAXXGRIDFILE][STRING]);
 
 char *usage[] = {
   "",
@@ -198,17 +297,6 @@ char *usage[] = {
   NULL
 };
 
-#define MAXXGRIDFILE 100
-#define MX 2000
-#define TINY_VALUE (1.e-7)
-#define TOLORENCE (1.e-4)
-#define MIN_AREA_FRAC (1.e-4)
-#define GREAT_CIRCLE_CLIP 1
-#define LEGACY_CLIP 2
-
-char grid_version[] = "0.2";
-char tagname[] = "$Name: fre-nctools-bronx-10 $";
-
 /* This file will get the directory that stores the file and the file name
  * (without the dir path) */
 void
@@ -296,6 +384,92 @@ get_global_grid (const char *grid_file, int nx, int ny, int x_refine,
   free (y_local);
 }
 
+/* Helper: process wave->ocean sequence (allocate, compute, write, free, check) */
+static void process_wav_to_ocn(int ntile_wav, int ntile_ocn, int interp_order,
+                               int *nxw, int *nyw, int *nxo, int *nyo,
+                               double **xwav, double **ywav,
+                               double **cart_xwav, double **cart_ywav, double **cart_zwav,
+                               double **xocn, double **yocn,
+                               double **cart_xocn, double **cart_yocn, double **cart_zocn,
+                               double **area_wav, double **area_ocn,
+                               double **omask,
+                               double area_ratio_thresh,
+                               int clip_method,
+                               int wav_same_as_ocn,
+                               char wxo_file[MAXXGRIDFILE][STRING], char *wmosaic_name, char **wtile_name,
+                               char *omosaic_name, char **otile_name, int same_mosaic,
+                               char *history, char *grid_version,
+                               int ocn_south_ext, int *nfile_wxo, double *wxo_area_sum, unsigned int check,
+                               unsigned int verbose)
+{
+  size_t **nwxo;
+  int ***wavxocn_iw, ***wavxocn_jw, ***wavxocn_io, ***wavxocn_jo;
+  double ***wavxocn_area, ***wavxocn_diw, ***wavxocn_djw, ***wavxocn_dio, ***wavxocn_djo;
+  double ***wavxocn_clon, ***wavxocn_clat;
+
+  allocate_wavxocn_arrays(ntile_wav, ntile_ocn, interp_order,
+                          &nwxo,
+                          &wavxocn_area,
+                          &wavxocn_iw, &wavxocn_jw,
+                          &wavxocn_io, &wavxocn_jo,
+                          &wavxocn_diw, &wavxocn_djw,
+                          &wavxocn_dio, &wavxocn_djo,
+                          &wavxocn_clon, &wavxocn_clat);
+
+  compute_wavxocn(ntile_wav, ntile_ocn,
+                  nxw, nyw, nxo, nyo,
+                  xwav, ywav, cart_xwav, cart_ywav, cart_zwav,
+                  xocn, yocn, cart_xocn, cart_yocn, cart_zocn,
+                  area_wav, area_ocn, omask,
+                  area_ratio_thresh, interp_order, clip_method,
+                  wav_same_as_ocn,
+                  nwxo,
+                  wavxocn_area,
+                  wavxocn_iw, wavxocn_jw,
+                  wavxocn_io, wavxocn_jo,
+                  wavxocn_diw, wavxocn_djw,
+                  wavxocn_dio, wavxocn_djo,
+                  wavxocn_clon, wavxocn_clat, verbose);
+
+  write_wav_masks_and_centroids(ntile_wav, ntile_ocn,
+                                nxw, nyw, nxo, nyo,
+                                nwxo,
+                                wavxocn_area,
+                                wavxocn_iw, wavxocn_jw,
+                                wavxocn_io, wavxocn_jo,
+                                wavxocn_diw, wavxocn_djw,
+                                wavxocn_dio, wavxocn_djo,
+                                wavxocn_clon, wavxocn_clat,
+                                area_wav, area_ocn,
+                                omask,
+                                interp_order,
+                                history, grid_version,
+                                clip_method, verbose);
+
+  write_wavxocn_files(ntile_wav, ntile_ocn,
+                      nwxo,
+                      wavxocn_area,
+                      wavxocn_iw, wavxocn_jw,
+                      wavxocn_io, wavxocn_jo,
+                      wavxocn_diw, wavxocn_djw,
+                      wavxocn_dio, wavxocn_djo,
+                      wavxocn_clon, wavxocn_clat,
+                      wxo_file, wmosaic_name, wtile_name,
+                      omosaic_name, otile_name, same_mosaic,
+                      history, grid_version,
+                      clip_method, interp_order,
+                      ocn_south_ext, nfile_wxo, wxo_area_sum, check);
+  /* release the memory */
+  free_wavxocn_arrays(ntile_wav, ntile_ocn, interp_order,
+                       nwxo,
+                       wavxocn_area,
+                       wavxocn_iw, wavxocn_jw,
+                       wavxocn_io, wavxocn_jo,
+                       wavxocn_clon, wavxocn_clat,
+                       wavxocn_diw, wavxocn_djw,
+                       wavxocn_dio, wavxocn_djo);
+
+}
 /* Helper: write the coupler mosaic file (extracted from main) */
 static void write_mosaic_file(const char *mosaic_file, char *history, char *grid_version,
                               int clip_method,
@@ -744,6 +918,7 @@ static void read_atmos_mosaic_block(const char *amosaic, char *amosaic_name,
       *cart_zatm = (double **)malloc ((*ntile_atm) * sizeof (double *));
       for (n = 0; n < *ntile_atm; n++)
         {
+          //printf("Call get_grid_great_circle_area for atmosphere tile %d grid...\n", n + 1);
           (*cart_xatm)[n] = (double *)malloc (((*nxa)[n] + 1) * ((*nya)[n] + 1) * sizeof (double));
           (*cart_yatm)[n] = (double *)malloc (((*nxa)[n] + 1) * ((*nya)[n] + 1) * sizeof (double));
           (*cart_zatm)[n] = (double *)malloc (((*nxa)[n] + 1) * ((*nya)[n] + 1) * sizeof (double));
@@ -757,7 +932,12 @@ static void read_atmos_mosaic_block(const char *amosaic, char *amosaic_name,
         {
           int i, j;
           // Calculate the ATM grid cell area (not read from grid files)
+          //printf("Call get_grid_global_area for atmosphere tile %d grid...\n", n + 1);
           get_grid_global_area ((*nxa)[n], (*nya)[n], (*xatm)[n], (*yatm)[n], (*area_atm)[n]);
+          double atm_area_sum = 0.0;
+          for (i = 0; i < (*nxa)[n] * (*nya)[n]; i++)
+            atm_area_sum += (*area_atm)[n][i];
+          //printf("  Total area for atmosphere tile %d grid = %f km^2\n", n + 1, atm_area_sum / 1.0e6);
           for (j = 0; j < (*nya)[n]; j++)
             for (i = 0; i < (*nxa)[n]; i++)
               {
@@ -1663,7 +1843,7 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
               mask[i] = l_area[nl][i] / area_lnd[nl][i];
               l_a[i] = l_area[nl][i];
               a_l[i] = area_lnd[nl][i];
-              a_a[i] = area_atm[nl][i];
+              a_a[i] = area_atm[nl][i]; //Niki: This would be totally nonesense if lnd and atm grids are different, should not be used
             }
         if (ntile_lnd > 1)
           sprintf (lnd_mask_file, "land_mask_tile%d.nc", nl + 1);
@@ -1745,7 +1925,7 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
       double xl[MV], yl[MV], zl[MV];
       double xo[MV], yo[MV], zo[MV];
       double x_out[MV], y_out[MV], z_out[MV];
-      double y_out_max, y_out_min;
+      double y_out_max, y_out_min, x_out_min;
       double atmxlnd_x[MX][MV], atmxlnd_y[MX][MV], atmxlnd_z[MX][MV];
       int atmxlnd_c[MX][MV];
       int num_v[MX];
@@ -1972,14 +2152,14 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                   ya_min = minval_double (4, ya);
                   ya_max = maxval_double (4, ya);
 
-                  na_in = fix_lon (xa, ya, 4, M_PI);
+                  na_in = fix_lon (xa, ya, 4, M_PI); //Shifts xa so the center to be within 0 to 2pi (pi-pi to pi+pi)
 
                   xa_min = minval_double (na_in, xa);
                   xa_max = maxval_double (na_in, xa);
                   xa_avg = avgval_double (na_in, xa);
                 }
               count = 0;
-              for (nl = 0; nl < ntile_lnd; nl++)
+              for (nl = 0; nl < ntile_lnd; nl++) //Niki: Do we have to loop over all land tiles if (lnd_same_as_atm)?
                 {
                   for (jl = js_lnd[nl]; jl <= je_lnd[nl]; jl++)
                     for (il = is_lnd[nl]; il <= ie_lnd[nl]; il++)
@@ -2069,7 +2249,7 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                             yl_max = maxval_double (4, yl);
                             if (yl_min >= ya_max || yl_max <= ya_min)
                               continue;
-                            nl_in = fix_lon (xl, yl, 4, xa_avg);
+                            nl_in = fix_lon (xl, yl, 4, xa_avg); //Shifts xl so the center to be within xa_avg-pi to xa_avg+pi
                             xl_min = minval_double (nl_in, xl);
                             xl_max = maxval_double (nl_in, xl);
 
@@ -2114,38 +2294,8 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                                             area_atm[na][la]);
                             y_out_min = minval_double (n_out, y_out);
                             y_out_max = maxval_double (n_out, y_out);
-                            if (fabs (y_out_min + 0.5 * M_PI) < 0.00003
-                                && verbose)
-                              {
-                                printf ("Near South Pole ATMxLND grid cell,  ATMxLND_area/ATM_area =%f, ATM_area=%f, LND_area=%f \n",
-                                        xarea / area_atm[na][la],
-                                        area_atm[na][la],
-                                        area_lnd[nl][jl * nxl[nl] + il]);
-                                printf ("longitudes and latitudes of the %d corners are:\n",
-                                        n_out);
-                                for (n = 0; n < n_out; n++)
-                                  printf ("%7.3f, ", x_out[n] * R2D);
-                                printf ("\n");
-                                for (n = 0; n < n_out; n++)
-                                  printf ("%7.3f, ", y_out[n] * R2D);
-                                printf ("\n");
-                              }
-                            if (fabs (y_out_max - 0.5 * M_PI) < 0.00003
-                                && verbose)
-                              {
-                                printf ("Near North Pole ATMxLND grid cell,  ATMxLND_area/ATM_area =%f, ATM_area=%f, LND_area=%f\n",
-                                        xarea / area_atm[na][la],
-                                        area_atm[na][la],
-                                        area_lnd[nl][jl * nxl[nl] + il]);
-                                printf ("longitudes and latitudes of the %d corners are:\n",
-                                        n_out);
-                                for (n = 0; n < n_out; n++)
-                                  printf ("%7.3f, ", x_out[n] * R2D);
-                                printf ("\n");
-                                for (n = 0; n < n_out; n++)
-                                  printf ("%7.3f, ", y_out[n] * R2D);
-                                printf ("\n");
-                              }
+                            x_out_min = minval_double (n_out, x_out);
+                            
                             if (xarea / min_area > area_ratio_thresh)
                               {
                                 if (print_grid)
@@ -2198,10 +2348,11 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                               }
                           }
                       }
-                }
+                }//end of land tile loop nl, generated atmXlnd for one atm cell
               atmxlnd_count = atmxlnd_count + count;
 
-              for (no = 0; no < ntile_ocn; no++)
+              //loop over each ocean cell to find overlaps with the current atm cell
+              for (no = 0; no < ntile_ocn; no++) 
                 {
                   for (jo = js_ocn[no]; jo <= je_ocn[no]; jo++)
                     for (io = is_ocn[no]; io <= ie_ocn[no]; io++)
@@ -2269,7 +2420,10 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                             yo[3] = yocn[no][n3];
                             yo_min = minval_double (4, yo);
                             yo_max = maxval_double (4, yo);
-                            no_in = fix_lon (xo, yo, 4, xa_avg);
+                            no_in = fix_lon (xo, yo, 4, xa_avg); //Shifts xo so the center to be within xa_avg-pi to xa_avg+pi, 
+                                                                 //e.g., when xa_avg=314 deg for an atm grid cell in tile 1 
+                                                                 //then the whole ocean grid longitude shifts from (-300,60) to (60,660) to include xa_avg
+                                                                 //e.g., ocean grid cell with xo in (40,41) shifts to xo in (400,401) 
                             xo_min = minval_double (no_in, xo);
                             xo_max = maxval_double (no_in, xo);
                           }
@@ -2292,32 +2446,7 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                                 n_out = clip_2dx2d (xa, ya, na_in, xo, yo, no_in,
                                                     x_out, y_out);
                               }
-                            if (fabs (y_out_max - 0.5 * M_PI) < 0.00003
-                                && fabs (yo_max - 0.5 * M_PI) < 0.00003
-                                && verbose)
-                              {
-                                printf ("Near North Pole ATMxLND grid cell\n");
-                                for (n = 0; n < na_in; n++)
-                                  printf ("%7.3f, ", xa[n] * R2D);
-                                printf ("\n");
-                                for (n = 0; n < na_in; n++)
-                                  printf ("%7.3f, ", ya[n] * R2D);
-                                printf ("\n");
-                                printf ("Near North Pole OCN grid cell\n");
-                                for (n = 0; n < no_in; n++)
-                                  printf ("%7.3f, ", xo[n] * R2D);
-                                printf ("\n");
-                                for (n = 0; n < no_in; n++)
-                                  printf ("%7.3f, ", yo[n] * R2D);
-                                printf ("\n");
-                                printf ("Near North Pole ATMxLNDxOCN grid cell\n");
-                                for (n = 0; n < n_out; n++)
-                                  printf ("%7.3f, ", x_out[n] * R2D);
-                                printf ("\n");
-                                for (n = 0; n < n_out; n++)
-                                  printf ("%7.3f, ", y_out[n] * R2D);
-                                printf ("\n");
-                              }
+                            
                             if (n_out > 0)
                               {
                                 if (clip_method == GREAT_CIRCLE_CLIP)
@@ -2331,13 +2460,7 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                                   printf ("error: xarea<0, %f", xarea);
                                 min_area = min (area_ocn[no][jo * nxo[no] + io],
                                                 area_atm[na][la]);
-                                if (fabs (y_out_max - 0.5 * M_PI) < 0.00003
-                                    && fabs (yo_max - 0.5 * M_PI) < 0.00003
-                                    && verbose)
-                                  {
-                                    printf ("Near North Pole: ATMxLNDxOCN_area/ATM_area =%f \n",
-                                            xarea / min_area);
-                                  }
+                                
                                 if (xarea / min_area > area_ratio_thresh)
                                   {
                                     atmxocn_area[na][no][naxo[na][no]] = xarea;
@@ -2365,6 +2488,16 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                           {
                             for (l = 0; l < count; l++)
                               {
+                                /*Apply a longitude fix to ocean cell xo based on the center of the atmxlnd cell
+                                  Otherwise, when lnd and atm grids are not the same some exchange grids may be missed, 
+                                  particularly around the Prime Meridian lon=0 
+                                */                          
+                                if(!lnd_same_as_atm){
+                                  no_in = fix_lon (xo, yo, 4, atmxlnd_x[l][0]); //Shifts xo so the center to be within xa_avg-pi to xa_avg+pi, 
+                                  xo_min = minval_double (no_in, xo);
+                                  xo_max = maxval_double (no_in, xo);
+                                }
+
                                 if (clip_method == GREAT_CIRCLE_CLIP)
                                   n_out = clip_2dx2d_great_circle (
                                       atmxlnd_x[l], atmxlnd_y[l], atmxlnd_z[l],
@@ -2383,6 +2516,8 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                                       xarea = poly_area (x_out, y_out, n_out) * lnd_frac;
                                     min_area = min (area_lnd[axl_t[l]][axl_j[l] * nxl[axl_t[l]] + axl_i[l]],
                                                     area_atm[na][la]);
+                                    y_out_min = minval_double (n_out, y_out);
+                                    
                                     if (xarea / min_area > area_ratio_thresh)
                                       {
                                         if (print_grid)
@@ -2413,11 +2548,6 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                   nl = axl_t[l];
                   min_area = min (area_lnd[nl][axl_j[l] * nxl[nl] + axl_i[l]],
                                   area_atm[na][la]);
-                  if (fabs (axl_ymin[l] + 0.5 * M_PI) < 0.00003 && verbose)
-                    {
-                      printf ("Near South Pole: ATMxLNDxOCN_area/ATM_area =%f \n",
-                              axl_area[l] / min_area);
-                    }
                   if (axl_area[l] / min_area > area_ratio_thresh)
                     {
                       atmxlnd_area[na][nl][naxl[na][nl]] = axl_area[l];
@@ -4654,23 +4784,13 @@ static void free_wavxocn_arrays(int ntile_wav, int ntile_ocn, int interp_order,
     }
 }
 
-/* Helper: free wav->ocean arrays then perform tiling checks (extracted from main) */
-static void post_wav_free_and_tiling_check(int ntile_wav, int ntile_ocn, int interp_order,
-                                           size_t **nwxo,
-                                           double ***wavxocn_area,
-                                           int ***wavxocn_iw, int ***wavxocn_jw,
-                                           int ***wavxocn_io, int ***wavxocn_jo,
-                                           double ***wavxocn_clon, double ***wavxocn_clat,
-                                           double ***wavxocn_diw, double ***wavxocn_djw,
-                                           double ***wavxocn_dio, double ***wavxocn_djo,
-                                           unsigned int verbose,
-                                           int ntile_atm, int *nxa, int *nya,
-                                           double **atm_xarea, double **area_atm,
-                                           double axo_area_sum, double axl_area_sum,
-                                           int tile_nest,
-                                           double axo_area_sum_nest, double axl_area_sum_nest,
-                                           char *wmosaic, double wxo_area_sum,
-                                           unsigned int check)
+/* Helper: perform tiling checks (extracted from main) */
+static void check_tiling_error(int ntile_atm, int *nxa, int *nya, double **atm_xarea, double **area_atm,
+                              double axo_area_sum, double axl_area_sum,
+                              int tile_nest,
+                              double axo_area_sum_nest, double axl_area_sum_nest,
+                              char *wmosaic, double wxo_area_sum,
+                              unsigned int check, unsigned int verbose)
 {
   int n, i;
   double axo_area_frac;
@@ -4681,20 +4801,8 @@ static void post_wav_free_and_tiling_check(int ntile_wav, int ntile_ocn, int int
   double tiling_area_nest;
   double atm_area_sum, atm_area_sum_nest;
 
-  /* release the memory */
-  free_wavxocn_arrays(ntile_wav, ntile_ocn, interp_order,
-                       nwxo,
-                       wavxocn_area,
-                       wavxocn_iw, wavxocn_jw,
-                       wavxocn_io, wavxocn_jo,
-                       wavxocn_clon, wavxocn_clat,
-                       wavxocn_diw, wavxocn_djw,
-                       wavxocn_dio, wavxocn_djo);
-
   if (mpp_pe () == mpp_root_pe () && verbose)
-    printf ("\nNOTE from make_coupler_mosaic: Complete the process to "
-            "create exchange grids "
-            "between wave and ocean\n");
+    printf ("\nNOTE from make_coupler_mosaic: Check tiling error\n");
 
   /* tiling check */
   if (mpp_pe () == mpp_root_pe ())
@@ -4783,8 +4891,6 @@ static void post_wav_free_and_tiling_check(int ntile_wav, int ntile_ocn, int int
     }
 } 
 
-
-
 int main (int argc, char *argv[])
 {
   int c, i, n, same_mosaic;
@@ -4862,7 +4968,7 @@ int main (int argc, char *argv[])
           { "mosaic_name", required_argument, NULL, 'm' },
           { "area_ratio_thresh", required_argument, NULL, 'r' },
           { "check", no_argument, NULL, 'n' },
-          { "verbose", no_argument, NULL, 'v' },
+          { "verbose", required_argument, NULL, 'v' },
           { "print_memory", no_argument, NULL, 'p' },
           { "rotate_poly", no_argument, NULL, 'u' },
           { NULL, 0, NULL, 0 } };
@@ -4908,7 +5014,7 @@ int main (int argc, char *argv[])
         check = 1;
         break;
       case 'v':
-        verbose = 1;
+        verbose = atoi (optarg);
         break;
       case 'p':
         print_memory = 1;
@@ -5277,13 +5383,11 @@ int main (int argc, char *argv[])
   nfile_lxo = 0;
   if (!lnd_same_as_atm)
     {
-      int no, nl, ll, lo;
       size_t **nlxo;
       int ***lndxocn_il, ***lndxocn_jl, ***lndxocn_io, ***lndxocn_jo;
       double ***lndxocn_area, ***lndxocn_dil, ***lndxocn_djl, ***lndxocn_dio,
           ***lndxocn_djo;
       double ***lndxocn_clon, ***lndxocn_clat;
-      double min_area;
 
       if (mpp_pe () == mpp_root_pe () && verbose)
         printf ("\nNOTE from make_coupler_mosaic: lmosaic is different from  amosaic, "
@@ -5369,85 +5473,29 @@ int main (int argc, char *argv[])
 
   if (wmosaic)
     {
-      nfile_wxo = 0;
-      
-      size_t **nwxo;
-      int ***wavxocn_iw, ***wavxocn_jw, ***wavxocn_io, ***wavxocn_jo;
-      double ***wavxocn_area, ***wavxocn_diw, ***wavxocn_djw, ***wavxocn_dio,
-          ***wavxocn_djo;
-      double ***wavxocn_clon, ***wavxocn_clat;
-
-      allocate_wavxocn_arrays(ntile_wav, ntile_ocn, interp_order,
-                              &nwxo,
-                              &wavxocn_area,
-                              &wavxocn_iw, &wavxocn_jw,
-                              &wavxocn_io, &wavxocn_jo,
-                              &wavxocn_diw, &wavxocn_djw,
-                              &wavxocn_dio, &wavxocn_djo,
-                              &wavxocn_clon, &wavxocn_clat);
-
-      compute_wavxocn(ntile_wav, ntile_ocn,
-                      nxw, nyw, nxo, nyo,
-                      xwav, ywav, cart_xwav, cart_ywav, cart_zwav,
-                      xocn, yocn, cart_xocn, cart_yocn, cart_zocn,
-                      area_wav, area_ocn, omask,
-                      area_ratio_thresh, interp_order, clip_method,
-                      wav_same_as_ocn,
-                      nwxo,
-                      wavxocn_area,
-                      wavxocn_iw, wavxocn_jw,
-                      wavxocn_io, wavxocn_jo,
-                      wavxocn_diw, wavxocn_djw,
-                      wavxocn_dio, wavxocn_djo,
-                      wavxocn_clon, wavxocn_clat, verbose);
-      /* calculate the centroid of model grid, as well as land_mask and
-       * ocean_mask */
-      
-      write_wav_masks_and_centroids(ntile_wav, ntile_ocn,
-                                    nxw, nyw, nxo, nyo,
-                                    nwxo,
-                                    wavxocn_area,
-                                    wavxocn_iw, wavxocn_jw,
-                                    wavxocn_io, wavxocn_jo,
-                                    wavxocn_diw, wavxocn_djw,
-                                    wavxocn_dio, wavxocn_djo,
-                                    wavxocn_clon, wavxocn_clat,
-                                    area_wav, area_ocn,
-                                    omask,
-                                    interp_order,
-                                    history, grid_version,
-                                    clip_method, verbose);
-
-      /* write out the wavxocn */
-      write_wavxocn_files(ntile_wav, ntile_ocn,
-              nwxo,
-              wavxocn_area,
-              wavxocn_iw, wavxocn_jw,
-              wavxocn_io, wavxocn_jo,
-              wavxocn_diw, wavxocn_djw,
-              wavxocn_dio, wavxocn_djo,
-              wavxocn_clon, wavxocn_clat,
-              wxo_file, wmosaic_name, wtile_name,
-              omosaic_name, otile_name, same_mosaic,
-              history, grid_version,
-              clip_method, interp_order,
-              ocn_south_ext, &nfile_wxo, &wxo_area_sum, check);
-
-      /* release memory and perform tiling check */
-      post_wav_free_and_tiling_check(ntile_wav, ntile_ocn, interp_order,
-                                     nwxo,
-                                     wavxocn_area,
-                                     wavxocn_iw, wavxocn_jw,
-                                     wavxocn_io, wavxocn_jo,
-                                     wavxocn_clon, wavxocn_clat,
-                                     wavxocn_diw, wavxocn_djw,
-                                     wavxocn_dio, wavxocn_djo,
-                                     verbose,
-                                     ntile_atm, nxa, nya, atm_xarea, area_atm,
-                                     axo_area_sum, axl_area_sum, tile_nest,
-                                     axo_area_sum_nest, axl_area_sum_nest, wmosaic,
-                                     wxo_area_sum, check);
+      process_wav_to_ocn(ntile_wav, ntile_ocn, interp_order,
+                nxw, nyw, nxo, nyo,
+                xwav, ywav, cart_xwav, cart_ywav, cart_zwav,
+                xocn, yocn, cart_xocn, cart_yocn, cart_zocn,
+                area_wav, area_ocn,
+                omask,
+                area_ratio_thresh,
+                clip_method,
+                wav_same_as_ocn,
+                wxo_file, wmosaic_name, wtile_name,
+                omosaic_name, otile_name, same_mosaic,
+                history, grid_version,
+                ocn_south_ext, &nfile_wxo, &wxo_area_sum, check,
+                verbose);
     }
+    
+  /*Check Tiling error*/
+  check_tiling_error(ntile_atm, nxa, nya, atm_xarea, area_atm,
+                    axo_area_sum, axl_area_sum, tile_nest,
+                    axo_area_sum_nest, axl_area_sum_nest, 
+                    wmosaic, wxo_area_sum,
+                    check, verbose);
+
   /*Fianlly create the coupler mosaic file mosaic_name.nc */
   write_mosaic_file(mosaic_file, history, grid_version, clip_method,
                     nfile_axo, nfile_axl, nfile_lxo, nfile_wxo,
