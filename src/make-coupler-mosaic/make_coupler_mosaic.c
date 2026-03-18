@@ -332,8 +332,8 @@ get_global_grid (const char *grid_file, int nx, int ny, int x_refine,
   double *x_local, *y_local, *tmp;
   size_t start[4], nread[4];
   int nxc, nyc, isc, iec, jsc, jec;
-  int isc2, iec2, jsc2, jec2;
-  int nxc2, nyc2, layout[2];
+  int nxc2, nyc2, isc2, iec2, jsc2, jec2;
+  int layout[2];
   int fid, vid, i, j;
   domain2D Dom;
 
@@ -489,11 +489,11 @@ static void write_mosaic_file(const char *mosaic_file, char *history, char *grid
                               char lxo_file[MAXXGRIDFILE][STRING],
                               char wxo_file[MAXXGRIDFILE][STRING])
 {
-  int i, fid, dim_string, dim_axo, dim_lxo, dim_axl, dim_axw, dim_wxo, dims[4], n;
+  int i, fid, dim_string, dim_axo, dim_lxo, dim_axl, dim_wxo, dims[4], n;
   size_t start[4], nwrite[4];
   int id_lmosaic_dir, id_lmosaic_file, id_omosaic_dir, id_omosaic_file, id_wmosaic_dir;
   int id_amosaic_dir, id_amosaic_file, id_otopog_dir, id_otopog_file, id_wmosaic_file;
-  int id_xgrids_dir, id_axo_file, id_lxo_file, id_axl_file, id_wxo_file;
+  int id_axo_file, id_lxo_file, id_axl_file, id_wxo_file;
   int id_amosaic, id_lmosaic, id_omosaic, id_wmosaic;
 
   fid = mpp_open (mosaic_file, MPP_WRITE);
@@ -836,7 +836,7 @@ static void read_atmos_mosaic_block(const char *amosaic, char *amosaic_name,
       start[n] = 0;
       nread[n] = 1;
     }
-    
+
   m_fid = mpp_open (amosaic, MPP_READ);
   vid = mpp_get_varid (m_fid, "mosaic");
   mpp_get_var_value (m_fid, vid, amosaic_name);
@@ -855,7 +855,7 @@ static void read_atmos_mosaic_block(const char *amosaic, char *amosaic_name,
   tid = mpp_get_varid (m_fid, "gridtiles");
   for (n = 0; n < *ntile_atm; n++)
     {
-      int i, j;
+      int i;
 
       start[0] = n;
       start[1] = 0;
@@ -1137,7 +1137,7 @@ static void read_atmos_mosaic_block(const char *amosaic, char *amosaic_name,
         {
           double *tmpx, *tmpy;
           int i, j;
-          double min_atm_lat, min_lat;
+          double min_atm_lat;
           int nyo_old;
 
           start[0] = n;
@@ -1335,7 +1335,7 @@ static void read_atmos_mosaic_block(const char *amosaic, char *amosaic_name,
                                       double ***cart_xwav, double ***cart_ywav,
                                       double ***cart_zwav)
     {
-      int i, n, m_fid, g_fid, vid, gid, tid;
+      int n, m_fid, g_fid, vid, gid, tid;
       size_t start[4], nread[4];
       char dir[STRING], filename[STRING], file[2 * STRING];
 
@@ -1363,7 +1363,7 @@ static void read_atmos_mosaic_block(const char *amosaic, char *amosaic_name,
       tid = mpp_get_varid (m_fid, "gridtiles");
       for (n = 0; n < *ntile_wav; n++)
         {
-          int i, j;
+          int i;
 
           start[0] = n;
           start[1] = 0;
@@ -1451,7 +1451,7 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                                     unsigned int verbose, int *nbad)
 {
   double **l_area, **o_area;
-  int nl, no, ll, lo, i, ii;
+  int nl, no, ll, lo, i;
   l_area = (double **)malloc (ntile_lnd * sizeof (double *));
   o_area = (double **)malloc (ntile_ocn * sizeof (double *));
   for (nl = 0; nl < ntile_lnd; nl++)
@@ -1886,7 +1886,7 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
   free (o_area);
   free (l_area);
 }
-  
+
     /* Extracted helper: compute ATM-LND-OCN exchange grids for all ATM tiles */
     static void compute_atm_lnd_ocn_exchange(int ntile_atm, int ntile_lnd, int ntile_ocn,
                                              int *nxa, int *nya, double **xatm,
@@ -1945,10 +1945,12 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
 
       for (na = 0; na < ntile_atm; na++)
         {
+          time_t na_start, na_end;  /* Timing variables for ATM tile processing */
           if (print_memory)
             {
               sprintf (mesg, "start of loop na=%d", na);
               print_mem_usage (mesg);
+              na_start = time(NULL);  /* start timer for this loop */
             }
           for (nl = 0; nl < ntile_lnd; nl++)
             naxl[na][nl] = 0;
@@ -2093,6 +2095,16 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
           if (mpp_pe () == mpp_root_pe () && verbose)
             printf ("na = %d, la = %d, is=%d, ie = %d\n", na, la, is, ie);
           atmxlnd_count = 0;
+          /* GPU offload region: Process atmospheric cells with GPU acceleration */
+          #pragma acc parallel loop independent collapse(1) \
+            present(xatm[na], yatm[na], cart_xatm[na], cart_yatm[na], cart_zatm[na], \
+                    xlnd, ylnd, cart_xlnd, cart_ylnd, cart_zlnd, \
+                    xocn, yocn, cart_xocn, cart_yocn, cart_zocn, \
+                    area_lnd, area_atm, area_ocn, omask, \
+                    naxl[na], naxo[na], atmxlnd_area[na], atmxocn_area[na], \
+                    atmxlnd_ia[na], atmxlnd_ja[na], atmxlnd_il[na], atmxlnd_jl[na], \
+                    atmxocn_ia[na], atmxocn_ja[na], atmxocn_io[na], atmxocn_jo[na], \
+                    atmxlnd_clon[na], atmxlnd_clat[na], atmxocn_clon[na], atmxocn_clat[na])
           for (la = is; la <= ie; la++)
             {
               ia = la % nxa[na];
@@ -2282,35 +2294,30 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                               }
                             else
                               {
-                                n_out = clip_2dx2d (xa, ya, na_in, xl, yl, nl_in,
-                                                    x_out, y_out);
+                                n_out = clip_2dx2d (xa, ya, na_in, xl, yl, nl_in, x_out, y_out);
                               }
                           }
 
                         if (n_out > 0)
                           {
                             if (clip_method == GREAT_CIRCLE_CLIP)
-                              xarea = great_circle_area (n_out, x_out, y_out,
-                                                         z_out);
+                              xarea = great_circle_area (n_out, x_out, y_out, z_out);
                             else
                               xarea = poly_area (x_out, y_out, n_out);
-                            min_area = min (area_lnd[nl][jl * nxl[nl] + il],
-                                            area_atm[na][la]);
+                            min_area = min (area_lnd[nl][jl * nxl[nl] + il], area_atm[na][la]);
                             y_out_min = minval_double (n_out, y_out);
                             y_out_max = maxval_double (n_out, y_out);
                             x_out_min = minval_double (n_out, x_out);
-                            
+
                             if (xarea / min_area > area_ratio_thresh)
                               {
                                 if (print_grid)
                                   {
                                     double xtmp[20], ytmp[20];
                                     printf ("n_axl is %d\n", n_out);
-                                    xyz2latlon (n_out, x_out, y_out, z_out, xtmp,
-                                                ytmp);
+                                    xyz2latlon (n_out, x_out, y_out, z_out, xtmp, ytmp);
                                     for (n = 0; n < n_out; n++)
-                                      printf ("%15.11f, %15.11f \n",
-                                              xtmp[n] * R2D, ytmp[n] * R2D);
+                                      printf ("%15.11f, %15.11f \n", xtmp[n] * R2D, ytmp[n] * R2D);
                                   }
 
                                 axl_i[count] = il;
@@ -2356,7 +2363,7 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
               atmxlnd_count = atmxlnd_count + count;
 
               //loop over each ocean cell to find overlaps with the current atm cell
-              for (no = 0; no < ntile_ocn; no++) 
+              for (no = 0; no < ntile_ocn; no++)
                 {
                   for (jo = js_ocn[no]; jo <= je_ocn[no]; jo++)
                     for (io = is_ocn[no]; io <= ie_ocn[no]; io++)
@@ -2424,10 +2431,10 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                             yo[3] = yocn[no][n3];
                             yo_min = minval_double (4, yo);
                             yo_max = maxval_double (4, yo);
-                            no_in = fix_lon (xo, yo, 4, xa_avg); //Shifts xo so the center to be within xa_avg-pi to xa_avg+pi, 
-                                                                 //e.g., when xa_avg=314 deg for an atm grid cell in tile 1 
+                            no_in = fix_lon (xo, yo, 4, xa_avg); //Shifts xo so the center to be within xa_avg-pi to xa_avg+pi,
+                                                                 //e.g., when xa_avg=314 deg for an atm grid cell in tile 1
                                                                  //then the whole ocean grid longitude shifts from (-300,60) to (60,660) to include xa_avg
-                                                                 //e.g., ocean grid cell with xo in (40,41) shifts to xo in (400,401) 
+                                                                 //e.g., ocean grid cell with xo in (40,41) shifts to xo in (400,401)
                             xo_min = minval_double (no_in, xo);
                             xo_max = maxval_double (no_in, xo);
                           }
@@ -2447,24 +2454,19 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                                 if (xa_min >= xo_max || xa_max <= xo_min
                                     || yo_min >= ya_max || yo_max <= ya_min)
                                   continue;
-                                n_out = clip_2dx2d (xa, ya, na_in, xo, yo, no_in,
-                                                    x_out, y_out);
+                                n_out = clip_2dx2d (xa, ya, na_in, xo, yo, no_in, x_out, y_out);
                               }
-                            
+
                             if (n_out > 0)
                               {
                                 if (clip_method == GREAT_CIRCLE_CLIP)
-                                  xarea = great_circle_area (n_out, x_out, y_out,
-                                                             z_out)
-                                          * ocn_frac;
+                                  xarea = great_circle_area (n_out, x_out, y_out, z_out) * ocn_frac;
                                 else
-                                  xarea = poly_area (x_out, y_out, n_out)
-                                          * ocn_frac;
+                                  xarea = poly_area (x_out, y_out, n_out) * ocn_frac;
                                 if (xarea < 0)
                                   printf ("error: xarea<0, %f", xarea);
-                                min_area = min (area_ocn[no][jo * nxo[no] + io],
-                                                area_atm[na][la]);
-                                
+                                min_area = min (area_ocn[no][jo * nxo[no] + io], area_atm[na][la]);
+
                                 if (xarea / min_area > area_ratio_thresh)
                                   {
                                     atmxocn_area[na][no][naxo[na][no]] = xarea;
@@ -2475,14 +2477,14 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                                     if (interp_order == 2)
                                       {
                                         atmxocn_clon[na][no][naxo[na][no]]
-                                            = poly_ctrlon (x_out, y_out, n_out,
-                                                           xa_avg)
-                                              * ocn_frac;
+                                            = poly_ctrlon (x_out, y_out, n_out, xa_avg) * ocn_frac;
                                         atmxocn_clat[na][no][naxo[na][no]]
-                                            = poly_ctrlat (x_out, y_out, n_out)
-                                              * ocn_frac;
+                                            = poly_ctrlat (x_out, y_out, n_out) * ocn_frac;
                                       }
-                                    ++(naxo[na][no]);
+                                    #pragma acc atomic capture
+                                    {
+                                      (naxo[na][no])++;
+                                    }
                                     if (naxo[na][no] > get_maxxgrid())
                                       {
                                         char msg[200];
@@ -2497,11 +2499,11 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                             for (l = 0; l < count; l++)
                               {
                                 /*Apply a longitude fix to ocean cell xo based on the center of the atmxlnd cell
-                                  Otherwise, when lnd and atm grids are not the same some exchange grids may be missed, 
-                                  particularly around the Prime Meridian lon=0 
-                                */                          
+                                  Otherwise, when lnd and atm grids are not the same some exchange grids may be missed,
+                                  particularly around the Prime Meridian lon=0
+                                */
                                 if(!lnd_same_as_atm){
-                                  no_in = fix_lon (xo, yo, 4, atmxlnd_x[l][0]); //Shifts xo so the center to be within xa_avg-pi to xa_avg+pi, 
+                                  no_in = fix_lon (xo, yo, 4, atmxlnd_x[l][0]); //Shifts xo so the center to be within xa_avg-pi to xa_avg+pi,
                                   xo_min = minval_double (no_in, xo);
                                   xo_max = maxval_double (no_in, xo);
                                 }
@@ -2525,7 +2527,7 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                                     min_area = min (area_lnd[axl_t[l]][axl_j[l] * nxl[axl_t[l]] + axl_i[l]],
                                                     area_atm[na][la]);
                                     y_out_min = minval_double (n_out, y_out);
-                                    
+
                                     if (xarea / min_area > area_ratio_thresh)
                                       {
                                         if (print_grid)
@@ -2568,7 +2570,10 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
                           atmxlnd_clon[na][nl][naxl[na][nl]] = axl_clon[l];
                           atmxlnd_clat[na][nl][naxl[na][nl]] = axl_clat[l];
                         }
-                      ++(naxl[na][nl]);
+                      #pragma acc atomic capture
+                      {
+                        (naxl[na][nl])++;
+                      }
                       if (naxl[na][nl] > get_maxxgrid())
                         {
                           char msg[200];
@@ -2596,8 +2601,11 @@ static void finalize_and_write_masks(int ntile_atm, int ntile_lnd, int ntile_ocn
             {
               sprintf (mesg, "end of loop na=%d", na);
               print_mem_usage (mesg);
-            }
-        }
+              na_end = time(NULL);  /* end time for this atm tile */
+              if (mpp_pe() == mpp_root_pe())
+                printf("[TIMING] ATM tile %d: %.1f seconds\n", na, difftime(na_end, na_start));
+           }
+        }//end of atm tile loop na
     }
 
 /* Helper: allocate atm<->(lnd,ocn) exchange arrays extracted from main */
@@ -2727,7 +2735,7 @@ static void allocate_atm_exchange_arrays(int ntile_atm, int ntile_lnd,
         }
     }
 }
-  
+
 /* Helper: write atmXlnd and atmXocn exchange files extracted from main */
 static void write_atm_exchange_files(int ntile_atm, int ntile_lnd, int ntile_ocn,
                                      int tile_nest, int *nxa, int *nya, int *nxl, int *nyl,
@@ -3531,12 +3539,9 @@ static void compute_lndxocn_and_centroids(int ntile_lnd, int ntile_ocn,
                       if (n_out > 0)
                         {
                           if (clip_method == GREAT_CIRCLE_CLIP)
-                            xarea = great_circle_area (n_out, x_out, y_out,
-                                                       z_out)
-                                    * ocn_frac;
+                            xarea = great_circle_area (n_out, x_out, y_out, z_out) * ocn_frac;
                           else
-                            xarea = poly_area (x_out, y_out, n_out)
-                                    * ocn_frac;
+                            xarea = poly_area (x_out, y_out, n_out) * ocn_frac;
                           min_area = min (area_ocn[no][jo * nxo[no] + io],
                                           area_lnd[nl][ll]);
                           if (xarea / min_area > area_ratio_thresh)
@@ -3549,12 +3554,9 @@ static void compute_lndxocn_and_centroids(int ntile_lnd, int ntile_ocn,
                               if (interp_order == 2)
                                 {
                                   lndxocn_clon[nl][no][nlxo[nl][no]]
-                                      = poly_ctrlon (x_out, y_out, n_out,
-                                                     xl_avg)
-                                        * ocn_frac;
+                                      = poly_ctrlon (x_out, y_out, n_out, xl_avg) * ocn_frac;
                                   lndxocn_clat[nl][no][nlxo[nl][no]]
-                                      = poly_ctrlat (x_out, y_out, n_out)
-                                        * ocn_frac;
+                                      = poly_ctrlat (x_out, y_out, n_out) * ocn_frac;
                                 }
                               ++(nlxo[nl][no]);
                               if (nlxo[nl][no] > get_maxxgrid())
@@ -4244,8 +4246,7 @@ static void compute_wavxocn(int ntile_wav, int ntile_ocn,
                           }
                         if (n_out > 0)
                           {
-                            xarea = poly_area (x_out, y_out, n_out)
-                                    * ocn_frac;
+                            xarea = poly_area (x_out, y_out, n_out) * ocn_frac;
                             double min_area = min (area_ocn[no][jo * nxo[no] + io],
                                                    area_wav[nw][lw]);
                             if (xarea / min_area > area_ratio_thresh)
@@ -4258,12 +4259,9 @@ static void compute_wavxocn(int ntile_wav, int ntile_ocn,
                                 if (interp_order == 2)
                                   {
                                     wavxocn_clon[nw][no][nwxo[nw][no]]
-                                        = poly_ctrlon (x_out, y_out, n_out,
-                                                       xw_avg)
-                                          * ocn_frac;
+                                        = poly_ctrlon (x_out, y_out, n_out, xw_avg) * ocn_frac;
                                     wavxocn_clat[nw][no][nwxo[nw][no]]
-                                        = poly_ctrlat (x_out, y_out, n_out)
-                                          * ocn_frac;
+                                        = poly_ctrlat (x_out, y_out, n_out) * ocn_frac; //why not pass xw_avg?
                                   }
                                 ++(nwxo[nw][no]);
                                 if (nwxo[nw][no] > get_maxxgrid())
@@ -4906,7 +4904,7 @@ static void check_tiling_error(int ntile_atm, int *nxa, int *nya, double **atm_x
             }
         }
     }
-} 
+}
 
 int main (int argc, char *argv[])
 {
@@ -5154,7 +5152,7 @@ int main (int argc, char *argv[])
       ltile_name = atile_name;
       lnd_great_circle_algorithm = atm_great_circle_algorithm;
     }
-    
+
   for (n = 0; n < ntile_lnd; n++)
     {
       if (mpp_pe () == mpp_root_pe () && verbose)
@@ -5268,7 +5266,7 @@ int main (int argc, char *argv[])
   nfile_axl = 0;
   nfile_lxo = 0;
   int nbad = 0;
-  
+
   int no, nl, na;
   size_t **naxl, **naxo;
   int ***atmxlnd_ia, ***atmxlnd_ja, ***atmxlnd_il, ***atmxlnd_jl;
@@ -5295,7 +5293,7 @@ int main (int argc, char *argv[])
                                 &atmxocn_dio, &atmxocn_djo,
                                 &atmxlnd_clon, &atmxlnd_clat,
                                 &atmxocn_clon, &atmxocn_clat);
-      
+
 
   if (print_memory)
     print_mem_usage ("before calcuting exchange grid");
@@ -5398,7 +5396,7 @@ int main (int argc, char *argv[])
                             atmxocn_dia, atmxocn_dja,
                             atmxocn_dio, atmxocn_djo,
                             naxl, naxo);
-  
+
   if (mpp_pe () == mpp_root_pe () && verbose)
     printf ("\nNOTE from make_coupler_mosaic: Completed the process to create exchange grids "
             "for fluxes between atmosphere and surface (sea ice and land)\n");
@@ -5515,11 +5513,11 @@ int main (int argc, char *argv[])
                 ocn_south_ext, &nfile_wxo, &wxo_area_sum, check,
                 verbose);
     }
-    
+
   /*Check Tiling error*/
   check_tiling_error(ntile_atm, nxa, nya, atm_xarea, area_atm,
                     axo_area_sum, axl_area_sum, tile_nest,
-                    axo_area_sum_nest, axl_area_sum_nest, 
+                    axo_area_sum_nest, axl_area_sum_nest,
                     wmosaic, wxo_area_sum,
                     check, verbose);
 
