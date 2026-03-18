@@ -1,0 +1,48 @@
+# Makefile to create grid and grid dependent files for c48_o1deg
+# To use:
+#
+NP=6
+TOOLS =       tools
+FRE_NCTOOLS = ../../build/src
+
+OCEAN_GRID_DIR = /work/Niki.Zadeh/datasets/modelgrids/mosaic_SPEAR.C96.OM360x320.20171213
+OCEAN_DATA_FILE = /archive/Niki.Zadeh/fre/FMS2025.04_mom6_20260115/proto4.0_c48l33o1degSPEAR_4/gfdl.ncrc5-intel23-prod-openmp/pp/ocean_monthly/ts/monthly/10yr/ocean_monthly.059101-060012.tos.nc
+OCEAN_STATIC = /archive/Niki.Zadeh/fre/FMS2025.04_mom6_20260115/proto4.0_c48l33o1degSPEAR_4/gfdl.ncrc5-intel23-prod-openmp/pp/ocean_monthly/ocean_monthly.static.nc
+
+all: mosaic_atmc96_lndc48_om4_SPEAR.nc ocean_data_fregrid.nc check
+
+mosaic_atmc96_lndc48_om4_SPEAR.nc: $(FRE_NCTOOLS) $(FRE_NCTOOLS)/make_solo_mosaic $(FRE_NCTOOLS)/make_coupler_mosaic_parallel
+	ln -sf $(OCEAN_GRID_DIR)/ocean_mosaic.nc .
+	ln -sf $(OCEAN_GRID_DIR)/ocean_hgrid.nc .
+	ln -sf $(OCEAN_GRID_DIR)/ocean_topog.nc .
+	#generate hgrid for CXX atmosphere      make_hgrid --grid_type gnomonic_ed --nlon (2*XX) --grid_name CXX_grid
+	$(FRE_NCTOOLS)/make_hgrid --grid_type gnomonic_ed --nlon 96  --grid_name C48_grid
+	$(FRE_NCTOOLS)/make_hgrid --grid_type gnomonic_ed --nlon 192 --grid_name C96_grid
+	#generate mosaic for CXX atmosphere
+	$(FRE_NCTOOLS)/make_solo_mosaic --num_tiles 6 --dir ./ --mosaic_name C48_mosaic --tile_file C48_grid.tile1.nc,C48_grid.tile2.nc,C48_grid.tile3.nc,C48_grid.tile4.nc,C48_grid.tile5.nc,C48_grid.tile6.nc
+	$(FRE_NCTOOLS)/make_solo_mosaic --num_tiles 6 --dir ./ --mosaic_name C96_mosaic --tile_file C96_grid.tile1.nc,C96_grid.tile2.nc,C96_grid.tile3.nc,C96_grid.tile4.nc,C96_grid.tile5.nc,C96_grid.tile6.nc
+	time mpirun -np $(NP) $(FRE_NCTOOLS)/make_coupler_mosaic_parallel --atmos_mosaic C96_mosaic.nc --land_mosaic C48_mosaic.nc --ocean_mosaic ocean_mosaic.nc --mosaic_name mosaic_atmc96_lndc48_om4_SPEAR --ocean_topog ocean_topog.nc --verbose 2 --check |& tee stdout
+	cp $(@F) grid_spec.nc
+
+ocean_data_fregrid.nc: $(FRE_NCTOOLS) $(FRE_NCTOOLS)/fregrid
+	ln -sf $(OCEAN_GRID_DIR)/ocean_mosaic.nc .
+	ln -sf $(OCEAN_GRID_DIR)/ocean_hgrid.nc .
+	ln -sf $(OCEAN_DATA_FILE) ./ocean_data_input.nc 
+	ln -sf $(OCEAN_STATIC) ./05910101.ocean_static.nc
+	 
+	$(FRE_NCTOOLS)/fregrid --input_mosaic ocean_mosaic.nc --input_file ocean_data_input.nc --output_file ocean_data_fregrid.nc --standard_dimension --interp_method conserve_order1  --nlon 360 --nlat 180 --scalar_field tos |& tee stdout
+
+
+clean:
+#	-rm -rf fre_nctools local tools
+	-rm -rf stdout *.nc logfile* input.nml md5checksums
+
+#Recorded checksums
+#checksums.pp401.20260317.txt:
+#	./hashlibMD5.py -f C*.nc land_mask_tile* ocean_mask.nc >> $@
+
+check: 
+	./hashlibMD5.py -f C*.nc land_mask_tile* ocean_mask.nc ocean_data_fregrid.nc > md5checksums
+	diff md5checksums ./checksums.pp401.20260317.txt
+
+
