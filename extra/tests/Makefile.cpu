@@ -1,13 +1,16 @@
-# Makefile to create grid and grid dependent files for c48_o1deg
-# To use:
+# Makefile to test
+# - $(FRE_NCTOOLS)/make_coupler_mosaic_parallel to create a coupled model mosaic 
+# - $(FRE_NCTOOLS)/fregrid 
+# To test it  needs: 
+# - a pre-built fre-nctools
+# - some input data in a directory called ./.datasets
 #
 NP=6
 TOOLS =       tools
 FRE_NCTOOLS = ../../build/src
 
-OCEAN_GRID_DIR = /work/Niki.Zadeh/datasets/modelgrids/mosaic_SPEAR.C96.OM360x320.20171213
-OCEAN_DATA_FILE = /archive/Niki.Zadeh/fre/FMS2025.04_mom6_20260115/proto4.0_c48l33o1degSPEAR_4/gfdl.ncrc5-intel23-prod-openmp/pp/ocean_monthly/ts/monthly/10yr/ocean_monthly.059101-060012.tos.nc
-OCEAN_STATIC = /archive/Niki.Zadeh/fre/FMS2025.04_mom6_20260115/proto4.0_c48l33o1degSPEAR_4/gfdl.ncrc5-intel23-prod-openmp/pp/ocean_monthly/ocean_monthly.static.nc
+OCEAN_GRID_DIR = ./.datasets
+OCEAN_DATA_DIR = ./.datasets
 
 all: mosaic_atmc96_lndc48_om4_SPEAR.nc ocean_data_fregrid.nc check
 
@@ -27,8 +30,8 @@ mosaic_atmc96_lndc48_om4_SPEAR.nc: $(FRE_NCTOOLS) $(FRE_NCTOOLS)/make_solo_mosai
 ocean_data_fregrid.nc: $(FRE_NCTOOLS) $(FRE_NCTOOLS)/fregrid
 	ln -sf $(OCEAN_GRID_DIR)/ocean_mosaic.nc .
 	ln -sf $(OCEAN_GRID_DIR)/ocean_hgrid.nc .
-	ln -sf $(OCEAN_DATA_FILE) ./ocean_data_input.nc 
-	ln -sf $(OCEAN_STATIC) ./05910101.ocean_static.nc
+	ln -sf $(OCEAN_DATA_DIR)/ocean_data_input.nc .
+	ln -sf $(OCEAN_DATA_DIR)/05910101.ocean_static.nc .
 	 
 	$(FRE_NCTOOLS)/fregrid --input_mosaic ocean_mosaic.nc --input_file ocean_data_input.nc --output_file ocean_data_fregrid.nc --standard_dimension --interp_method conserve_order1  --nlon 360 --nlat 180 --scalar_field tos |& tee stdout
 
